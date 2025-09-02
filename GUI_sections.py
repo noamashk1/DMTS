@@ -88,12 +88,18 @@ class TkinterApp:
         self.tree_frame.config(width=600, height=200)
         self.tree_frame.pack_propagate(False)
 
-        # Prepare the Treeview in the tree frame
-        self.tree = ttk.Treeview(self.tree_frame, columns=("Level Name","Stimulus Path", "Probability", "Value", "Index"), show='headings', height=5)
+        # Prepare the Treeview in the tree frame with updated columns
+        self.tree = ttk.Treeview(
+            self.tree_frame,
+            columns=("Level Name", "base Stim", "Go Probability", "Stimulus Path", "Probability", "Index"),
+            show='headings',
+            height=5
+        )
         self.tree.heading("Level Name", text="Level Name")
+        self.tree.heading("base Stim", text="base Stim")
+        self.tree.heading("Go Probability", text="Go Probability")
         self.tree.heading("Stimulus Path", text="Stimulus Path")
         self.tree.heading("Probability", text="Probability")
-        self.tree.heading("Value", text="Value")
         self.tree.heading("Index", text="Index")
 
 
@@ -293,7 +299,7 @@ class TkinterApp:
             self.update_level_list()
             self.set_levels_df()
             self.set_fixed_column_widths()
-            self.clear_frame(self.left_frame_middle)                              ############## restart the mice if already chosen #####################
+            self.clear_frame(self.left_frame_middle)                              
             self.mice_table = mice_table_creating.MainApp(self.left_frame_middle, self) ############## restart the mice if already chosen #####################
         except Exception as e:
             messagebox.showerror("Error", f"Failed to load file: {e}")
@@ -403,9 +409,10 @@ class TkinterApp:
     def set_fixed_column_widths(self):
         # Define fixed widths for the columns
         self.tree.column("Level Name", width=50)
-        self.tree.column("Stimulus Path", width=200)
+        self.tree.column("base Stim", width=200)
+        self.tree.column("Go Probability", width=50)
+        self.tree.column("Stimulus Path", width=50)
         self.tree.column("Probability", width=50)
-        self.tree.column("Value", width=50)
         self.tree.column("Index", width=50)
 
     def open_data_analysis_window(self):

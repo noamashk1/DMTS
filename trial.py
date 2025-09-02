@@ -9,6 +9,7 @@ class Trial:
         self.current_stim = None
         self.current_value = None #go\no-go\catch
         self.current_stim_path = None
+        self.current_base_stim_path = None
         self.current_exp_parameters = None
         self.score = None
         self.start_time = None
@@ -33,9 +34,17 @@ class Trial:
         normalized_probabilities = [p / total_probability for p in probabilities]
         chosen_index = random.choices(indices, weights=normalized_probabilities, k=1)[0]
         self.current_stim_df = self.fsm.exp.levels_df.loc[(self.fsm.exp.levels_df['Level Name'] == level_name)&(self.fsm.exp.levels_df['Index'] == chosen_index)]
-        self.current_value = self.current_stim_df.iloc[0]['Value']
         self.current_stim_path = self.current_stim_df.iloc[0]['Stimulus Path']
         self.current_stim_index = self.current_stim_df.iloc[0]['Index']
+        go_probability = self.current_stim_df.iloc[0]['Go Probability']
+        self.current_value = self.calculate_go_no_go(go_probability)
+        self.current_base_stim_path = self.current_stim_df.iloc[0]['base Stim']
+
+    def calculate_go_no_go(self, go_probability):
+        if random.random() < (float(go_probability) / 100):
+            return "go"
+        else:
+            return "no-go"
 
     def end_trial(self): # the trial is over - go to save it
         pass
@@ -47,6 +56,7 @@ class Trial:
         self.current_stim = None
         self.current_value = None  # go\no-go\catch
         self.current_stim_path = None
+        self.current_base_stim_path = None
         self.start_time = None
         self.current_stim_index = None
         self.licks_time = []
@@ -56,12 +66,13 @@ class Trial:
         self.licks_time.append(current_datetime.strftime('%H:%M:%S.%f'))
 # Function to write trial results
     def write_trial_to_csv(self, txt_file_name):
-        header = ['date', 'start time', 'end time', 'mouse ID', 'level', r'go\no-go','stim index', 'stim name','score', 'licks_time'] # Define the header if the file does not exist yet
+        header = ['date', 'start time', 'end time', 'mouse ID', 'level','base stim', r'go\no-go','stim index', 'stim name','score', 'licks_time'] # Define the header if the file does not exist yet
         current_datetime = datetime.now()
         date = current_datetime.strftime('%Y-%m-%d')  # Get current date
         end_time = current_datetime.strftime('%H:%M:%S.%f')  # Get current time
         stim_name = os.path.basename(self.current_stim_path)
-        trial_data = [date, self.start_time, end_time, self.current_mouse.id, self.current_mouse.level, self.current_value,self.current_stim_index,stim_name, self.score , self.licks_time]
+        base_stim_name = os.path.basename(self.current_base_stim_path)
+        trial_data = [date, self.start_time, end_time, self.current_mouse.id, self.current_mouse.level, base_stim_name, self.current_value,self.current_stim_index,stim_name, self.score , self.licks_time]
         with open(txt_file_name, mode='a', newline='') as file:
             writer = csv.writer(file)
             # Check if the file is empty to write the header
