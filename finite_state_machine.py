@@ -239,21 +239,10 @@ class TrialState(State):
         self.fsm.current_trial.calculate_stim()
         self.fsm.exp.live_w.update_trial_value(self.fsm.current_trial.current_value)
 
-        stim_thread = threading.Thread(target=self.tdt_as_stim, args=(lambda: self.stop_threads,))
-        input_thread = threading.Thread(target=self.receive_input, args=(lambda: self.stop_threads,))
-
-        stim_thread.start()
-        input_thread.start()
-
-        while stim_thread.is_alive():
-            if self.got_response:
-                self.stop_threads = True
-                break
-            time.sleep(0.05)
-
-        stim_thread.join()
-        self.stop_threads = True
-        input_thread.join()
+        #stim_thread = threading.Thread(target=self.tdt_as_stim, args=(lambda: self.stop_threads,))
+        #input_thread = threading.Thread(target=self.receive_input, args=(lambda: self.stop_threads,))
+        self.tdt_as_stim()
+        self.receive_input()
         if self.fsm.current_trial.score is None:
             self.fsm.current_trial.score = self.evaluate_response()
             print("score: " + self.fsm.current_trial.score)
@@ -264,17 +253,15 @@ class TrialState(State):
             elif self.fsm.current_trial.score == 'fa':
                 self.give_punishment()
         
-        gc.collect()
         log_memory_usage("After Trial")
-        del stim_thread
-        del input_thread
         self.on_event('trial_over')
         
     def tdt_as_stim(self, stop):
+        base_stim_path = self.fsm.current_trial.current_base_stim_path
+        stim_path = self.fsm.current_trial.current_stim_path
         with audio_lock:  # ensure only one audio action at a time
-            stim_path = self.fsm.current_trial.current_stim_path
+            base_stim_array = None
             stim_array = None
-            sample_rate = None
 
             # Try to fetch from preloaded all_signals_df
             try:
@@ -284,37 +271,31 @@ class TrialState(State):
                     if not row.empty:
                         stim_array = row.iloc[0]['data']
                         sample_rate = row.iloc[0]['fs']
+                    row = df.loc[df['path'] == base_stim_path]
+                    if not row.empty:
+                        base_stim_array = row.iloc[0]['data']
+                        base_sample_rate = row.iloc[0]['fs']
             except Exception as e:
                 print(f"[TrialState] Warning: lookup in all_signals_df failed for '{stim_path}': {e}")
                 
             stim_duration = len(stim_array) / sample_rate
             sd.stop()
             try:
+                """first play the base stim"""
                 self.fsm.exp.live_w.toggle_indicator("stim", "on")
-                sd.play(stim_array, samplerate=sample_rate, blocking=True)
-                start_time = time.time()
-                while time.time() - start_time < stim_duration:
-                    if stop():#self.got_response:
-                        print("Early response detected — stopping stimulus")
-                        sd.stop()
-                        return
-                    time.sleep(0.05)
+                sd.play(base_stim_array, samplerate=base_sample_rate, blocking=True)
+                """then sleep between two tunes"""
+                time.sleep(1)
+                """then play the secondstim"""
+                if self.fsm.current_trial.current_value == 'go':
+                    sd.play(base_stim_array, samplerate=base_sample_rate, blocking=True)
+                elif self.fsm.current_trial.current_value == 'no-go':
+                    sd.play(stim_array, samplerate=sample_rate, blocking=True)
             finally:
                 sd.stop()
-                del stim_array
                 self.fsm.exp.live_w.toggle_indicator("stim", "off")
-
-            time_to_lick = int(self.fsm.exp.exp_params["time_to_lick_after_stim"])
-            print("Stimulus done. Waiting post-stim lick window...")
-
-            start_post = time.time()
-            while time.time() - start_post < time_to_lick:
-                if stop():#self.got_response:
-                    print("Early response during post-stim window — skipping rest")
-                    return
-                time.sleep(0.05)
-
-            print("Post-stim lick window completed.")
+                del stim_array
+                del base_stim_array 
             
 
     def receive_input(self, stop):
@@ -407,7 +388,12 @@ class FiniteStateMachine:
                 print("[FSM] 'Stimulus Path' column not found in levels_df; skipping all_signals_df build")
                 return
 
-            paths = [p for p in self.exp.levels_df["Stimulus Path"].tolist() if isinstance(p, str) and len(p) > 0]
+            # Collect both "Stimulus Path" and "base Stim" paths, filter out non-strings and empty
+            stim_paths = [p for p in self.exp.levels_df["Stimulus Path"].tolist() if isinstance(p, str) and len(p) > 0]
+            base_stim_paths = []
+            if "base Stim" in self.exp.levels_df.columns:
+                base_stim_paths = [p for p in self.exp.levels_df["base Stim"].tolist() if isinstance(p, str) and len(p) > 0]
+            paths = stim_paths + base_stim_paths
             unique_paths = []
             seen = set()
             for p in paths:

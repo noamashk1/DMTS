@@ -7,7 +7,7 @@ class Trial:
         self.fsm = fsm
         self.current_mouse = None
         self.current_stim = None
-        self.current_value = None #go\no-go\catch
+        self.current_value = None #go\no-go
         self.current_stim_path = None
         self.current_base_stim_path = None
         self.current_exp_parameters = None
