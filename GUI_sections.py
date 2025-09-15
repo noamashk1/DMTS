@@ -8,6 +8,7 @@ import mice_table_creating
 import levels_table_creating
 import parameters_GUI
 import live_window
+from column_constants import ColumnNames
 import threading
 import time
 import numpy as np
@@ -91,16 +92,16 @@ class TkinterApp:
         # Prepare the Treeview in the tree frame with updated columns
         self.tree = ttk.Treeview(
             self.tree_frame,
-            columns=("Level Name", "base Stim", "Go Probability", "Stimulus Path", "Probability", "Index"),
+            columns=ColumnNames.get_treeview_columns(),
             show='headings',
             height=5
         )
-        self.tree.heading("Level Name", text="Level Name")
-        self.tree.heading("base Stim", text="base Stim")
-        self.tree.heading("Go Probability", text="Go Probability")
-        self.tree.heading("Stimulus Path", text="Stimulus Path")
-        self.tree.heading("Probability", text="Probability")
-        self.tree.heading("Index", text="Index")
+        self.tree.heading(ColumnNames.LEVEL_NAME, text=ColumnNames.LEVEL_NAME)
+        self.tree.heading(ColumnNames.STIM_PATH, text=ColumnNames.STIM_PATH)
+        self.tree.heading(ColumnNames.VALUE, text=ColumnNames.VALUE)
+        self.tree.heading(ColumnNames.P_FIRST, text=ColumnNames.P_FIRST)
+        self.tree.heading(ColumnNames.P_SECOND, text=ColumnNames.P_SECOND)
+        self.tree.heading(ColumnNames.INDEX, text=ColumnNames.INDEX)
 
 
         # Set the width of the columns
@@ -179,7 +180,7 @@ class TkinterApp:
         # Labels and Entry fields for parameters
         params = {
             "Frequency (KHz)": 15,       # Default value
-            "Voltage": 0.5,                # Default value
+            "Voltage": 0.6,                # Default value
             "Tone Duration (s)": 0.5,     # Default value
             "Ramp Duration (s)": 0.05,    # Default value
             "Sampling Rate (Hz)": 300000  # Default value
@@ -244,7 +245,7 @@ class TkinterApp:
         
 
     def update_level_list(self):
-        column_index = 0  # Index of the "level_name" column
+        column_index = 0  # Index of the level name column (first column)
         values = []
         # Retrieve values from the specified column
         for item in self.tree.get_children():
@@ -407,13 +408,9 @@ class TkinterApp:
             file.write("\n" + "-"*40 + "\n")
     
     def set_fixed_column_widths(self):
-        # Define fixed widths for the columns
-        self.tree.column("Level Name", width=50)
-        self.tree.column("base Stim", width=200)
-        self.tree.column("Go Probability", width=50)
-        self.tree.column("Stimulus Path", width=50)
-        self.tree.column("Probability", width=50)
-        self.tree.column("Index", width=50)
+        # Define fixed widths for the columns using centralized widths
+        for column, width in ColumnNames.COLUMN_WIDTHS.items():
+            self.tree.column(column, width=width)
 
     def open_data_analysis_window(self):
         analysis_root = tk.Toplevel()

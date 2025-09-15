@@ -4,6 +4,7 @@ from tkinter import ttk  # Make sure to import ttk for the Combobox
 import csv  # To handle CSV writing
 from tkinter import filedialog  # To open the file dialog for saving files
 import os
+from column_constants import ColumnNames
 
 
 class LevelDefinitionApp:
@@ -18,10 +19,8 @@ class LevelDefinitionApp:
         self.save_button = None  # Initially set to None, to be defined later
         
         # Create header row for the first table
-        tk.Label(self.frame, text="Level Name", font=("Arial", 12, "bold")).grid(row=0, column=0, padx=5, pady=5)
-        tk.Label(self.frame, text="base Stim", font=("Arial", 12, "bold")).grid(row=0, column=1, padx=5, pady=5)
-        tk.Label(self.frame, text="'Go' probability", font=("Arial", 12, "bold")).grid(row=0, column=2, padx=5, pady=5)
-        tk.Label(self.frame, text="Number of Stimuli", font=("Arial", 12, "bold")).grid(row=0, column=3, padx=5, pady=5)
+        tk.Label(self.frame, text=ColumnNames.LEVEL_NAME, font=("Arial", 12, "bold")).grid(row=0, column=0, padx=5, pady=5)
+        tk.Label(self.frame, text=ColumnNames.NUMBER_OF_STIMULI, font=("Arial", 12, "bold")).grid(row=0, column=1, padx=5, pady=5)
         # Current row index for the first table
         self.current_row = 1
 
@@ -50,29 +49,10 @@ class LevelDefinitionApp:
         level_name_entry = tk.Entry(self.frame)
         level_name_entry.grid(row=self.current_row, column=0, padx=5, pady=5)
 
-        # Create a frame to hold the base stimulus entry and filename label (like in stimuli rows)
-        base_stim_frame = tk.Frame(self.frame)
-        base_stim_frame.grid(row=self.current_row, column=1, padx=5, pady=5)
-
-        base_stim_entry = tk.Entry(base_stim_frame)
-        base_stim_entry.pack(side=tk.TOP)
-
-        base_filename_label = tk.Label(base_stim_frame, text="", fg="gray")
-        base_filename_label.pack(side=tk.TOP)
-
-        # Bind click on the base stim entry to open file dialog and store path (as in line 182)
-        base_stim_entry.bind(
-            "<Button-1>",
-            lambda event, entry=base_stim_entry, label=base_filename_label: self.load_stimulus_file(entry, label)
-        )
-
-        go_probability_entry = tk.Entry(self.frame)
-        go_probability_entry.grid(row=self.current_row, column=2, padx=5, pady=5)
-
         stimuli_count_entry = tk.Entry(self.frame)  # Make the entry shorter
-        stimuli_count_entry.grid(row=self.current_row, column=3, padx=5, pady=5)
+        stimuli_count_entry.grid(row=self.current_row, column=1, padx=5, pady=5)
 
-        self.level_entries.append((level_name_entry, base_stim_entry, go_probability_entry, stimuli_count_entry))  # Save entries to access later
+        self.level_entries.append((level_name_entry, stimuli_count_entry))  # Save entries to access later
 
         # Update the current row and reposition buttons
         self.current_row += 1
@@ -85,12 +65,12 @@ class LevelDefinitionApp:
         
     def header_titles(self):
         # Create header for the stimuli table
-        tk.Label(self.stimuli_frame, text="Level Name", font=("Arial", 12, "bold")).grid(row=0, column=0, padx=5, pady=5)
-        tk.Label(self.stimuli_frame, text="base Stim", font=("Arial", 12, "bold")).grid(row=0, column=1, padx=5, pady=5)
-        tk.Label(self.stimuli_frame, text="'Go' probability", font=("Arial", 12, "bold")).grid(row=0, column=2, padx=5, pady=5)
-        tk.Label(self.stimuli_frame, text="'no-go' stim", font=("Arial", 12, "bold")).grid(row=0, column=3, padx=5, pady=5)
-        tk.Label(self.stimuli_frame, text="probability", font=("Arial", 12, "bold")).grid(row=0, column=4, padx=5, pady=5)
-        tk.Label(self.stimuli_frame, text="index", font=("Arial", 12, "bold")).grid(row=0, column=5, padx=5, pady=5)
+        tk.Label(self.stimuli_frame, text=ColumnNames.LEVEL_NAME, font=("Arial", 12, "bold")).grid(row=0, column=0, padx=5, pady=5)
+        tk.Label(self.stimuli_frame, text=ColumnNames.STIM_PATH, font=("Arial", 12, "bold")).grid(row=0, column=1, padx=5, pady=5)
+        tk.Label(self.stimuli_frame, text=ColumnNames.VALUE, font=("Arial", 12, "bold")).grid(row=0, column=2, padx=5, pady=5)
+        tk.Label(self.stimuli_frame, text=ColumnNames.P_FIRST, font=("Arial", 12, "bold")).grid(row=0, column=3, padx=5, pady=5)
+        tk.Label(self.stimuli_frame, text=ColumnNames.P_SECOND, font=("Arial", 12, "bold")).grid(row=0, column=4, padx=5, pady=5)
+        tk.Label(self.stimuli_frame, text=ColumnNames.INDEX, font=("Arial", 12, "bold")).grid(row=0, column=5, padx=5, pady=5)
             
     
     def load_levels(self):
@@ -139,10 +119,8 @@ class LevelDefinitionApp:
 
 
         # Attempt to build the second table based on user input
-        for level_entry, base_stim_entry, go_probability_entry, count_entry in self.level_entries:
+        for level_entry, count_entry in self.level_entries:
             level_name = level_entry.get().strip()
-            base_stim = base_stim_entry.get().strip()
-            go_probability = go_probability_entry.get().strip()
             try:
                 number_of_stimuli = int(count_entry.get().strip())
                 
@@ -151,7 +129,7 @@ class LevelDefinitionApp:
                     return
                 
                 # Create rows for each stimulus
-                self.create_stimuli_rows(level_name, base_stim, go_probability, number_of_stimuli)
+                self.create_stimuli_rows(level_name, number_of_stimuli)
 
                 # Enable the Save button if it's not already created
                 if self.save_button is None:
@@ -168,20 +146,22 @@ class LevelDefinitionApp:
         all_filled = True  # Flag to check if all fields are filled
 
         # Loop through all level entries to pull their contents
-        for level_name, base_stim, go_prob, stimulus_entry, probability_entry, index_entry in self.stimuli_table_content:
+        for level_name, stimulus_entry, value_combobox, p_first_entry, p_second_entry, index_entry in self.stimuli_table_content:
             
             #level_name = level_name_row.get().strip()
             stimulus_path = stimulus_entry.get().strip()
-            probability = probability_entry.get().strip()
+            value = value_combobox.get().strip()
+            p_first = p_first_entry.get().strip()
+            p_second = p_second_entry.get().strip()
             index = index_entry.get().strip()
 
             # Check if each required field is filled
-            if not stimulus_path or not probability or not index:
+            if not stimulus_path or not value or not p_first or not p_second or not index:
                 all_filled = False
                 break
 
             # הוספת שורה לשמירה
-            data_to_save.append([level_name, base_stim, go_prob, stimulus_path, probability, index])
+            data_to_save.append([level_name, stimulus_path, value, p_first, p_second, index])
 
         if all_filled:
             levels_dir = os.path.join(os.getcwd(), "Levels")
@@ -197,7 +177,7 @@ class LevelDefinitionApp:
             if file_path:
                 with open(file_path, mode='w', newline='') as file:
                     writer = csv.writer(file)
-                    writer.writerow(["Level Name", "base Stim", "Go Probability", "Stimulus Path", "Probability", "Index"])
+                    writer.writerow(ColumnNames.get_csv_headers())
                     writer.writerows(data_to_save)
                     print(data_to_save)
 
@@ -206,10 +186,10 @@ class LevelDefinitionApp:
         else:
             messagebox.showwarning("Input Error", "Please complete all the parameters.")
                 
-    def create_stimuli_rows(self, level_name, base_stim, go_probability, number_of_stimuli):
+    def create_stimuli_rows(self, level_name, number_of_stimuli):
         # Add rows for each stimulus
         # Calculate the starting row based on the number of widgets already in the grid
-        start_row = len(self.stimuli_frame.grid_slaves()) // 3  # This may need adjustment if you change the number of columns
+        start_row = len(self.stimuli_frame.grid_slaves()) // 2  # This may need adjustment if you change the number of columns
 
         for i in range(number_of_stimuli):
             row_idx = start_row + i + 1
@@ -217,15 +197,9 @@ class LevelDefinitionApp:
             # Add Level Name label
             tk.Label(self.stimuli_frame, text=level_name).grid(row=row_idx, column=0, padx=5, pady=2)
 
-            # Add Base Stim label (read-only, value from argument)
-            tk.Label(self.stimuli_frame, text=base_stim, fg="gray").grid(row=row_idx, column=1, padx=5, pady=2)
-
-            # Add Go Probability label (read-only, value from argument)
-            tk.Label(self.stimuli_frame, text=str(go_probability), fg="gray").grid(row=row_idx, column=2, padx=5, pady=2)
-
             # Create a frame to hold the entry and label for the stimulus path
             stimuli_frame = tk.Frame(self.stimuli_frame)
-            stimuli_frame.grid(row=row_idx, column=3, padx=5, pady=2)
+            stimuli_frame.grid(row=row_idx, column=1, padx=5, pady=2)
 
             # Create the Stimuli entry field
             stimulus_entry = tk.Entry(stimuli_frame)
@@ -238,27 +212,31 @@ class LevelDefinitionApp:
             # Bind the click event for the entry
             stimulus_entry.bind("<Button-1>", lambda event, entry=stimulus_entry, label=filename_label: self.load_stimulus_file(entry, label))
 
-            # Create the Probability entry field (user input for this specific stimulus)
-            probability_entry = tk.Entry(self.stimuli_frame)
-            probability_entry.grid(row=row_idx, column=4, padx=5, pady=2)
-
             # Create a Combobox for the value column
-            # value_combobox = ttk.Combobox(self.stimuli_frame, values=["go", "no-go", "catch"])
-            # value_combobox.grid(row=row_idx, column=5, padx=5, pady=2)
-            # value_combobox.set("Select")  # Set a default placeholder in the combobox
+            value_combobox = ttk.Combobox(self.stimuli_frame, values=[r"go\no-go", "catch"])
+            value_combobox.grid(row=row_idx, column=2, padx=5, pady=2)
+            value_combobox.set("Select")  # Set a default placeholder in the combobox
+
+            # Create the P(first) entry field (user input for this specific stimulus)
+            p_first_entry = tk.Entry(self.stimuli_frame)
+            p_first_entry.grid(row=row_idx, column=3, padx=5, pady=2)
+
+            # Create the P(second) entry field
+            p_second_entry = tk.Entry(self.stimuli_frame)
+            p_second_entry.grid(row=row_idx, column=4, padx=5, pady=2)
 
             # Create the index entry field
             index_entry = tk.Entry(self.stimuli_frame)
-            index_entry.grid(row=row_idx, column=6, padx=5, pady=2)
+            index_entry.grid(row=row_idx, column=5, padx=5, pady=2)
 
             # Store all relevant widgets and values for later use
             self.stimuli_table_content.append(
-                (level_name, base_stim, go_probability, stimulus_entry, probability_entry,  index_entry) #value_combobox,
+                (level_name, stimulus_entry, value_combobox, p_first_entry, p_second_entry, index_entry)
             )
 
         # Draw a line separator after the last row of stimuli for this level
         separator = tk.Frame(self.stimuli_frame, height=1, bg="gray")  # Create a frame for the line
-        separator.grid(row=start_row + number_of_stimuli + 1, column=0, columnspan=7, sticky="ew", padx=5, pady=5)  # columnspan=7 for the new columns
+        separator.grid(row=start_row + number_of_stimuli + 1, column=0, columnspan=6, sticky="ew", padx=5, pady=5)  # columnspan=6 for the new columns
         
     def load_stimulus_file(self, entry, label):
         # Open file dialog to select a stimulus file

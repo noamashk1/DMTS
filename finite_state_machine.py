@@ -257,8 +257,8 @@ class TrialState(State):
         self.on_event('trial_over')
         
     def tdt_as_stim(self, stop):
-        base_stim_path = self.fsm.current_trial.current_base_stim_path
-        stim_path = self.fsm.current_trial.current_stim_path
+        first_stim_path = self.fsm.current_trial.first_stim_path
+        second_stim_path = self.fsm.current_trial.current_stim_path
         with audio_lock:  # ensure only one audio action at a time
             base_stim_array = None
             stim_array = None
