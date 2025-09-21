@@ -21,7 +21,7 @@ from data_analysis import DataAnalysis
 class TkinterApp:
     def __init__(self, root,exp, exp_name):
         self.root = root
-        self.root.title("Educage")
+        self.root.title("DMTS - auditory")
         #self.experiment = experiment_1.Experiment(exp_name, self.root)
         self.levels_list = []
         self.levels_df = None
@@ -340,10 +340,10 @@ class TkinterApp:
                 "lick_threshold": self.parameters_btns.licks_entry.get(),
                 "time_to_lick_after_stim": self.parameters_btns.time_licks_entry.get(),
                 "open_valve_duration": self.parameters_btns.time_open_valve_entry.get(),
+                "timeout_punishment": self.parameters_btns.timeout_punishment_entry.get(),
                 "ITI": self.parameters_btns.ITI_display_option.get(),
                 "ITI_time": self.parameters_btns.ITI_bin_size_entry.get() if self.parameters_btns.ITI_display_option.get() == '2' else None,
                 "stimulus_length": self.experiment.stim_length,
-                "timeout_punishment": self.parameters_btns.punishment_timeout_entry.get(),
             }
             # Set parameters in the Experiment class
             self.experiment.set_levels_df(self.levels_df)

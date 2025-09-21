@@ -14,6 +14,7 @@ import objgraph
 import logging
 import pandas as pd
 import shutil
+import glob
 
 audio_lock = threading.Lock()
 valve_pin = 4  # 23
@@ -28,8 +29,13 @@ GPIO.setup(valve_pin, GPIO.OUT)
 
 GPIO.setwarnings(False)
 
-ser = serial.Serial(port='/dev/ttyUSB0', baudrate=9600,
-                    timeout=0.01)  # timeo1  # Change '/dev/ttyS0' to the detected port
+ports = glob.glob('/dev/ttyUSB*')
+if not ports:
+    raise Exception("No USB serial device found!")
+
+port = ports[0] 
+ser = serial.Serial(port=port, baudrate=9600, timeout=0.01)
+print(f"Connected to {port}")
 
 file_log_path = "/home/educage/git_educage2/educage2/pythonProject1/open_files_monitor.log"  # לשנות למיקום שתרצה
 file_logger = logging.getLogger("open_files_monitor")
@@ -100,7 +106,8 @@ class State:
     def __init__(self, name, fsm):
         self.name = name
         self.fsm = fsm
-        self.fsm.exp.live_w.deactivate_states_indicators(name)
+        if self.fsm.exp.live_w.activate_window:
+            self.fsm.exp.live_w.deactivate_states_indicators(name)
 
     def on_event(self, event):
         pass
@@ -111,10 +118,11 @@ class IdleState(State):
         super().__init__("Idle", fsm)
         ser.flushInput()  # clear the data from the serial
         self.fsm.current_trial.clear_trial()
-        self.fsm.exp.live_w.update_last_rfid('')
-        self.fsm.exp.live_w.update_level('')
-        self.fsm.exp.live_w.update_score('')
-        self.fsm.exp.live_w.update_trial_value('')
+        if self.fsm.exp.live_w.activate_window:
+            self.fsm.exp.live_w.update_last_rfid('')
+            self.fsm.exp.live_w.update_level('')
+            self.fsm.exp.live_w.update_score('')
+            self.fsm.exp.live_w.update_trial_value('')
 
         log_memory_usage("Enter Idle")
 
@@ -162,11 +170,12 @@ class IdleState(State):
                     print("\nmouse: " + self.fsm.exp.mice_dict[mouse_id].get_id())
                     print("Level: " + self.fsm.exp.mice_dict[mouse_id].get_level())
                     
-                    # בדיקה בסיסית שה-live_w זמין
+
                     if hasattr(self.fsm.exp, 'live_w') and self.fsm.exp.live_w is not None:
                         try:
-                            self.fsm.exp.live_w.update_last_rfid(mouse_id)
-                            self.fsm.exp.live_w.update_level(self.fsm.exp.mice_dict[mouse_id].get_level())
+                            if self.fsm.exp.live_w.activate_window:
+                                self.fsm.exp.live_w.update_last_rfid(mouse_id)
+                                self.fsm.exp.live_w.update_level(self.fsm.exp.mice_dict[mouse_id].get_level())
                         except Exception as e:
                             print(f"[IdleState] Warning: Could not update GUI: {e}")
                     
@@ -205,9 +214,12 @@ class InPortState(State):
                 return
             time.sleep(0.09)
 
-        self.fsm.exp.live_w.toggle_indicator("IR", "on")
-        time.sleep(0.1)
-        self.fsm.exp.live_w.toggle_indicator("IR", "off")
+        if self.fsm.exp.live_w.activate_window:
+            self.fsm.exp.live_w.toggle_indicator("IR", "on")
+            time.sleep(0.1)
+            self.fsm.exp.live_w.toggle_indicator("IR", "off")
+        else:
+            time.sleep(0.1)
         print("The mouse entered!")
 
         if self.fsm.exp.exp_params["start_trial_time"] is not None:
@@ -237,16 +249,16 @@ class TrialState(State):
     def run_trial(self):
         self.fsm.current_trial.start_time = datetime.now().strftime('%H:%M:%S.%f')  # Get current time
         self.fsm.current_trial.calculate_stim()
-        self.fsm.exp.live_w.update_trial_value(self.fsm.current_trial.current_value)
+        if self.fsm.exp.live_w.activate_window:
+            self.fsm.exp.live_w.update_trial_value(self.fsm.current_trial.current_value)
 
-        #stim_thread = threading.Thread(target=self.tdt_as_stim, args=(lambda: self.stop_threads,))
-        #input_thread = threading.Thread(target=self.receive_input, args=(lambda: self.stop_threads,))
         self.tdt_as_stim()
         self.receive_input()
         if self.fsm.current_trial.score is None:
             self.fsm.current_trial.score = self.evaluate_response()
             print("score: " + self.fsm.current_trial.score)
-            self.fsm.exp.live_w.update_score(self.fsm.current_trial.score)
+            if self.fsm.exp.live_w.activate_window:
+                self.fsm.exp.live_w.update_score(self.fsm.current_trial.score)
 
             if self.fsm.current_trial.score == 'hit':
                 self.give_reward()
@@ -260,69 +272,76 @@ class TrialState(State):
         first_stim_path = self.fsm.current_trial.first_stim_path
         second_stim_path = self.fsm.current_trial.current_stim_path
         with audio_lock:  # ensure only one audio action at a time
-            base_stim_array = None
-            stim_array = None
-
             # Try to fetch from preloaded all_signals_df
             try:
                 df = getattr(self.fsm, 'all_signals_df', None)
                 if df is not None and hasattr(df, 'empty') and not df.empty:
-                    row = df.loc[df['path'] == stim_path]
-                    if not row.empty:
-                        stim_array = row.iloc[0]['data']
-                        sample_rate = row.iloc[0]['fs']
-                    row = df.loc[df['path'] == base_stim_path]
-                    if not row.empty:
-                        base_stim_array = row.iloc[0]['data']
-                        base_sample_rate = row.iloc[0]['fs']
+                    row_first = df.loc[df['path'] == first_stim_path]
+                    first_stim_array = row_first.iloc[0]['data']
+                    first_sample_rate = row_first.iloc[0]['fs']
+                    row_second = df.loc[df['path'] == second_stim_path]
+                    second_stim_array = row_second.iloc[0]['data']
+                    second_sample_rate = row_second.iloc[0]['fs']
             except Exception as e:
-                print(f"[TrialState] Warning: lookup in all_signals_df failed for '{stim_path}': {e}")
-                
-            stim_duration = len(stim_array) / sample_rate
+                print(f"[TrialState] Warning: lookup in all_signals_df failed for '{first_stim_path}' and '{second_stim_path}': {e}")
             sd.stop()
             try:
                 """first play the base stim"""
-                self.fsm.exp.live_w.toggle_indicator("stim", "on")
-                sd.play(base_stim_array, samplerate=base_sample_rate, blocking=True)
+                if self.fsm.exp.live_w.activate_window:
+                    self.fsm.exp.live_w.toggle_indicator("stim", "on")
+                sd.play(first_stim_array, samplerate=first_sample_rate, blocking=True)
                 """then sleep between two tunes"""
-                time.sleep(1)
+                inter_stim_delay = 1
+                time.sleep(inter_stim_delay)
                 """then play the secondstim"""
-                if self.fsm.current_trial.current_value == 'go':
-                    sd.play(base_stim_array, samplerate=base_sample_rate, blocking=True)
-                elif self.fsm.current_trial.current_value == 'no-go':
-                    sd.play(stim_array, samplerate=sample_rate, blocking=True)
+                sd.play(second_stim_array, samplerate=second_sample_rate, blocking=True)
             finally:
                 sd.stop()
-                self.fsm.exp.live_w.toggle_indicator("stim", "off")
-                del stim_array
-                del base_stim_array 
+                if self.fsm.exp.live_w.activate_window:
+                    self.fsm.exp.live_w.toggle_indicator("stim", "off")
+                del first_stim_array
+                del second_stim_array
+                del first_sample_rate
+                del second_sample_rate
             
 
-    def receive_input(self, stop):
-        if self.fsm.exp.exp_params["lick_time_bin_size"] is not None:
+    def receive_input(self):
+        if self.fsm.exp.exp_params["lick_time_bin_size"] is not None: # By time
             time.sleep(int(self.fsm.exp.exp_params["lick_time_bin_size"]))
-        elif self.fsm.exp.exp_params["lick_time"] == "1":
+        elif self.fsm.exp.exp_params["lick_time"] == "1": # After stim
             pass
-        elif self.fsm.exp.exp_params["lick_time"] == "2":
-            time.sleep(int(self.fsm.exp.exp_params["stimulus_length"]))
 
         counter = 0
         self.got_response = False
+        previous_lick_state = GPIO.LOW  # Track previous state for edge detection (0 = LOW)
         print('waiting for licks...')
-        while not stop():
-            if GPIO.input(lick_pin) == GPIO.HIGH:
-                self.fsm.exp.live_w.toggle_indicator("lick", "on")
+        
+        # Use only the post-stimulus time for lick detection
+        response_time = int(self.fsm.exp.exp_params["time_to_lick_after_stim"])
+        
+        start_time = time.time()
+        
+        while (time.time() - start_time) < response_time:
+            current_lick_state = GPIO.input(lick_pin)
+            # Only count lick on transition from LOW to HIGH (rising edge)
+            if current_lick_state == 1 and previous_lick_state == 0:  # 1 == HIGH, 0 == LOW
+                if self.fsm.exp.live_w.activate_window:
+                    self.fsm.exp.live_w.toggle_indicator("lick", "on")
+                    time.sleep(0.08) #wait for the lick to be visible on the indicator
                 self.fsm.current_trial.add_lick_time()
                 counter += 1
-                time.sleep(0.08)
-                self.fsm.exp.live_w.toggle_indicator("lick", "off")
+                
+                if self.fsm.exp.live_w.activate_window:
+                    self.fsm.exp.live_w.toggle_indicator("lick", "off")
                 print("lick detected")
 
                 if counter >= int(self.fsm.exp.exp_params["lick_threshold"]) and not self.got_response:
                     self.got_response = True
                     print('threshold reached')
                     break
-
+            
+            # Update previous state for next iteration
+            previous_lick_state = current_lick_state
             time.sleep(0.08)
 
         if not self.got_response:
@@ -372,9 +391,15 @@ class FiniteStateMachine:
         self.current_trial = Trial(self)
         self.state = IdleState(self)
         self.all_signals_df = None
-        with np.load('/home/educage/git_educage2/educage2/pythonProject1/stimuli/white_noise.npz', mmap_mode='r') as z:
-            self.noise = z['noise']
-            self.noise_Fs = int(z['Fs'])
+        
+        # Load white noise for punishment
+        try:
+            #with np.load('/home/educage/git_educage2/educage2/pythonProject1/stimuli/white_noise.npz', mmap_mode='r') as z:
+            with np.load(os.path.join('stimuli', 'white_noise.npz'), mmap_mode='r') as z:
+                self.noise = z['noise']
+                self.noise_Fs = int(z['Fs'])
+        except FileNotFoundError:
+            print("Warning: white_noise.npz not found, punishment audio will not work")
 
         # Build a DataFrame with all stimuli referenced by the levels table
         self._build_all_signals_df()
@@ -389,11 +414,7 @@ class FiniteStateMachine:
                 return
 
             # Collect both "Stimulus Path" and "base Stim" paths, filter out non-strings and empty
-            stim_paths = [p for p in self.exp.levels_df["Stimulus Path"].tolist() if isinstance(p, str) and len(p) > 0]
-            base_stim_paths = []
-            if "base Stim" in self.exp.levels_df.columns:
-                base_stim_paths = [p for p in self.exp.levels_df["base Stim"].tolist() if isinstance(p, str) and len(p) > 0]
-            paths = stim_paths + base_stim_paths
+            paths = [p for p in self.exp.levels_df["stim path"].tolist() if isinstance(p, str) and len(p) > 0]
             unique_paths = []
             seen = set()
             for p in paths:
@@ -462,406 +483,3 @@ class FiniteStateMachine:
 
 if __name__ == "__main__":
     fsm = FiniteStateMachine()
-# 
-# import serial
-# import time
-# import RPi.GPIO as GPIO
-# import threading
-# from trial import Trial
-# from datetime import datetime
-# import numpy as np
-# import sounddevice as sd
-# #
-# valve_pin = 4#23
-# IR_pin = 22#25
-# lick_pin = 17#24
-# #
-# GPIO.setwarnings(False)
-# GPIO.setmode(GPIO.BCM)
-# GPIO.setup(IR_pin, GPIO.IN)
-# GPIO.setup(lick_pin, GPIO.IN)
-# GPIO.setup(valve_pin, GPIO.OUT)
-# #
-# GPIO.setwarnings(False)
-# #
-# ser = serial.Serial(port='/dev/ttyUSB0', baudrate=9600,
-#                     timeout=0.01)  # timeout=1  # Change '/dev/ttyS0' to the detected port
-# #
-# #
-# class State:
-#     def __init__(self, name, fsm):
-#         self.name = name
-#         self.fsm = fsm
-#         self.fsm.exp.live_w.deactivate_states_indicators(name)
-# #
-#     def on_event(self, event):
-#         pass
-# #
-# #
-# class IdleState(State):
-#     def __init__(self, fsm):
-#         super().__init__("Idle", fsm)
-#         ser.flushInput()  # clear the data from the serial
-#         self.fsm.current_trial.clear_trial()
-#         self.fsm.exp.live_w.update_last_rfid('')
-#         self.fsm.exp.live_w.update_level('')
-#         self.fsm.exp.live_w.update_score('')
-#         self.fsm.exp.live_w.update_trial_value('')
-# #
-#         threading.Thread(target=self.wait_for_event, daemon=True).start()
-# #
-#     def wait_for_event(self):
-#         minutes_passed = 0
-#         last_log_time = time.time()
-# #
-#         while True:
-# #
-#             if time.time() - last_log_time > 60:
-#                 minutes_passed += 1
-#                 last_log_time = time.time()
-#                 print(f"[IdleState] Waiting for RFID... {minutes_passed} minutes passed")
-# #
-#             if ser.in_waiting > 0 and not self.fsm.exp.live_w.pause:
-#                 try:
-#                     mouse_id = ser.readline().decode('utf-8').rstrip()
-#                 except Exception as e:
-#                     print(f"[IdleState] Error reading RFID: {e}")
-#                     continue
-# #
-#                 if self.recognize_mouse(mouse_id):
-#                     self.fsm.current_trial.update_current_mouse(self.fsm.exp.mice_dict[mouse_id])
-#                     print("mouse: " + self.fsm.exp.mice_dict[mouse_id].get_id())
-#                     print("Level: " + self.fsm.exp.mice_dict[mouse_id].get_level())
-#                     self.fsm.exp.live_w.update_last_rfid(mouse_id)
-#                     self.fsm.exp.live_w.update_level(self.fsm.exp.mice_dict[mouse_id].get_level())
-#                     self.on_event('in_port')
-#                     break
-#             else:
-#                 ser.flushInput()
-#                 time.sleep(0.05)
-# #
-# #     def wait_for_event(self):
-# #         while True:
-# #             if ser.in_waiting > 0 and not self.fsm.exp.live_w.pause:
-# #                 mouse_id = ser.readline().decode('utf-8').rstrip()
-# #                 if self.recognize_mouse(mouse_id):
-# #                     self.fsm.current_trial.update_current_mouse(self.fsm.exp.mice_dict[mouse_id])
-# #                     print("mouse: " + self.fsm.exp.mice_dict[mouse_id].get_id())
-# #                     print("Level: " + self.fsm.exp.mice_dict[mouse_id].get_level())
-# #                     self.fsm.exp.live_w.update_last_rfid(mouse_id)
-# #                     self.fsm.exp.live_w.update_level(self.fsm.exp.mice_dict[mouse_id].get_level())
-# #                     self.on_event('in_port')
-# #                     break
-# #             else:
-# #                 ser.flushInput()  # Flush input buffer
-# #                 time.sleep(0.05)
-# #
-#     def on_event(self, event):
-#         if event == 'in_port':
-#             print("Transitioning from Idle to in_port")
-#             self.fsm.state = InPortState(self.fsm)
-# #
-#     def recognize_mouse(self, data: str):
-#         if data in self.fsm.exp.mice_dict:
-#             print('recognized mouse: ' + data)
-#             return True
-#         else:
-#             print("mouse ID: '" + data + "' does not exist in the mouse dictionary.")
-#             return False
-# #
-# #
-# # class InPortState(State):
-# #     def __init__(self, fsm):
-# #         super().__init__("port", fsm)
-# #         threading.Thread(target=self.wait_for_event, daemon=True).start()
-# #
-# #     def wait_for_event(self):
-# #         while GPIO.input(IR_pin) != GPIO.HIGH:
-# #             time.sleep(0.09)
-# #         self.fsm.exp.live_w.toggle_indicator("IR", "on")
-# #         time.sleep(0.1)
-# #         self.fsm.exp.live_w.toggle_indicator("IR", "off")
-# #         print("The mouse entered!")
-# #         if self.fsm.exp.exp_params["start_trial_time"] is not None:
-# #             time.sleep(int(self.fsm.exp.exp_params["start_trial_time"]))
-# #             print("sleep before start trial")
-# #         self.on_event('IR_stim')
-# #
-# #     def on_event(self, event):
-# #         if event == 'IR_stim':
-# #             print("Transitioning from in_port to trial")
-# #             self.fsm.state = TrialState(self.fsm)
-# #
-# class InPortState(State):
-#     def __init__(self, fsm):
-#         super().__init__("port", fsm)
-#         threading.Thread(target=self.wait_for_event, daemon=True).start()
-# #
-#     def wait_for_event(self):
-#         timeout_seconds = 15  # timeout
-#         start_time = time.time()
-# #
-#         while GPIO.input(IR_pin) != GPIO.HIGH:
-#             if time.time() - start_time > timeout_seconds:
-#                 print("Timeout in InPortState: returning to IdleState")
-#                 self.on_event("timeout")
-#                 return
-#             time.sleep(0.09)
-# #
-#         self.fsm.exp.live_w.toggle_indicator("IR", "on")
-#         time.sleep(0.1)
-#         self.fsm.exp.live_w.toggle_indicator("IR", "off")
-#         print("The mouse entered!")
-# #
-#         if self.fsm.exp.exp_params["start_trial_time"] is not None:
-#             time.sleep(int(self.fsm.exp.exp_params["start_trial_time"]))
-#             print("Sleep before start trial")
-# #
-#         self.on_event('IR_stim')
-# #
-#     def on_event(self, event):
-#         if event == 'IR_stim':
-#             print("Transitioning from InPort to Trial")
-#             self.fsm.state = TrialState(self.fsm)
-#         elif event == 'timeout':
-#             print("Transitioning from InPort to Idle due to timeout")
-#             self.fsm.state = IdleState(self.fsm)
-# #
-# class TrialState(State):
-#     def __init__(self, fsm):
-#         super().__init__("trial", fsm)
-#         self.got_response = None
-#         self.stop_threads = False
-#         self.trial_thread = threading.Thread(target=self.run_trial)
-#         self.trial_thread.start()
-# #
-#     def run_trial(self):
-#         self.fsm.current_trial.start_time = datetime.now().strftime('%H:%M:%S.%f')  # Get current time
-#         self.fsm.current_trial.calculate_stim()
-#         self.fsm.exp.live_w.update_trial_value(self.fsm.current_trial.current_value)
-# #
-#         stim_thread = threading.Thread(target=self.tdt_as_stim)
-#         input_thread = threading.Thread(target=self.receive_input, args=(lambda: self.stop_threads,))
-# #
-#         stim_thread.start()
-#         input_thread.start()
-# #
-# #         stim_thread.join()
-# #         self.stop_threads = True
-# #         input_thread.join()
-#         while stim_thread.is_alive():
-#             if self.got_response:
-#                 self.stop_threads = True
-#                 break
-#             time.sleep(0.05)
-# #
-#         stim_thread.join()
-#         self.stop_threads = True
-#         input_thread.join()
-#         if self.fsm.current_trial.score is None:
-#             self.fsm.current_trial.score = self.evaluate_response()
-#             print("score: " + self.fsm.current_trial.score)
-#             self.fsm.exp.live_w.update_score(self.fsm.current_trial.score)
-# #
-#             if self.fsm.current_trial.score == 'hit':
-#                 self.give_reward()
-#             elif self.fsm.current_trial.score == 'fa':
-#                 self.give_punishment()
-# #
-#         self.on_event('trial_over')
-# #
-#     def give_reward(self):
-#         GPIO.output(valve_pin, GPIO.HIGH)
-#         #time.sleep(0.03)
-#         time.sleep(float(self.fsm.exp.exp_params["open_valve_duration"]))
-#         GPIO.output(valve_pin, GPIO.LOW)
-# #
-# #     def give_punishment(self):
-# #         try:
-# #             noise = np.load('/home/educage/git_educage2/educage2/pythonProject1/stimuli/white_noise.npy')
-# #             sd.play(noise, len(noise))
-# #             sd.wait()
-# #         finally:
-# #             self.fsm.exp.live_w.toggle_indicator("stim", "off")
-# #             time.sleep(5) #timeout as punishment
-# #
-#     def give_punishment(self): #after changing to .npz
-#         try:
-#             data = np.load('/home/educage/git_educage2/educage2/pythonProject1/stimuli/white_noise.npz')
-#             noise = data['noise']
-#             Fs = int(data['Fs'])
-#             sd.play(noise, samplerate=Fs)
-#             sd.wait()
-#         finally:
-#             self.fsm.exp.live_w.toggle_indicator("stim", "off")
-#             time.sleep(5) #timeout as punishment
-# #
-# #
-# #
-# #     def tdt_as_stim(self):
-# #         stim_path = self.fsm.current_trial.current_stim_path
-# #         print(stim_path)
-# #         try:
-# #             tone_shape = np.load(stim_path)
-# #             sd.play(tone_shape, len(tone_shape))
-# #             sd.wait()
-# #         finally:
-# #             self.fsm.exp.live_w.toggle_indicator("stim", "off")
-# #             time.sleep(int(self.fsm.exp.exp_params["time_to_lick_after_stim"]))
-# #             print('stimulus done')
-#     def tdt_as_stim(self):
-#         stim_path = self.fsm.current_trial.current_stim_path
-#         try:
-#             stim_data = np.load(stim_path)
-#             if isinstance(stim_data, np.lib.npyio.NpzFile):
-#                 stim_array = stim_data["data"]
-#                 sample_rate = stim_data["rate"].item()  # .item() -> int
-#             else:
-#                 stim_array = stim_data
-#                 sample_rate = int(300000)
-#                 print("Should use NPZ file!!!! now this is the default sampling rate: 300000 !!!!!")
-# #
-#             stim_duration = len(stim_array) / sample_rate
-#             print("stim_duration: " +str(stim_duration))
-# #
-# #             sd.play(stim_array, sample_rate)
-#             sd.play(stim_array, len(stim_array))
-# #
-#             start_time = time.time()
-#             while time.time() - start_time < stim_duration:
-#                 if self.got_response:
-#                     print("Early response detected — stopping stimulus")
-#                     sd.stop()
-#                     return
-#                 time.sleep(0.05)
-# #
-#             sd.wait()
-#             time_to_lick = int(self.fsm.exp.exp_params["time_to_lick_after_stim"])
-#             print("Stimulus done. Waiting post-stim lick window...")
-# #
-#             start_post = time.time()
-#             while time.time() - start_post < time_to_lick:
-#                 if self.got_response:
-#                     print("Early response during post-stim window — skipping rest")
-#                     return
-#                 time.sleep(0.05)
-# #
-#             print("Post-stim lick window completed.")
-# #
-#         finally:
-#             self.fsm.exp.live_w.toggle_indicator("stim", "off")
-# #
-# #
-#     def receive_input(self, stop):
-#         if self.fsm.exp.exp_params["lick_time_bin_size"] is not None:
-#             time.sleep(int(self.fsm.exp.exp_params["lick_time_bin_size"]))
-#         elif self.fsm.exp.exp_params["lick_time"] == "1":
-#             pass
-#         elif self.fsm.exp.exp_params["lick_time"] == "2":
-#             time.sleep(int(self.fsm.exp.exp_params["stimulus_length"]))
-# #
-#         counter = 0
-#         self.got_response = False
-#         print('waiting for licks...')
-#         while not stop():
-#             if GPIO.input(lick_pin) == GPIO.HIGH:
-#                 self.fsm.exp.live_w.toggle_indicator("lick", "on")
-#                 self.fsm.current_trial.add_lick_time()
-#                 counter += 1
-#                 time.sleep(0.08)
-#                 self.fsm.exp.live_w.toggle_indicator("lick", "off")
-#                 print("lick detected")
-# #
-#                 if counter >= int(self.fsm.exp.exp_params["lick_threshold"]) and not self.got_response:
-#                     self.got_response = True
-#                     print('threshold reached')
-# #
-# #                     self.fsm.current_trial.score = self.evaluate_response()
-# #                     print(f"Immediate evaluation: {self.fsm.current_trial.score}")
-# #
-# #                     if self.fsm.current_trial.score == 'hit':
-# #                         self.give_reward()
-# #                     elif self.fsm.current_trial.score == 'fa':
-# #                         self.give_punishment()
-# #                     self.fsm.exp.live_w.update_score(self.fsm.current_trial.score)
-#                     break
-# #
-#             time.sleep(0.08)
-# #
-#         if not self.got_response:
-#             print('no response')
-#         print('num of licks:', counter)
-# #
-# #     def receive_input(self, stop):
-# #         if self.fsm.exp.exp_params["lick_time_bin_size"] is not None:
-# #             time.sleep(int(self.fsm.exp.exp_params["lick_time_bin_size"]))
-# #         elif self.fsm.exp.exp_params["lick_time"] == "1":
-# #             pass
-# #         elif self.fsm.exp.exp_params["lick_time"] == "2":
-# #             time.sleep(int(self.fsm.exp.exp_params["stimulus_length"]))
-# #
-# #         counter = 0
-# #         self.got_response = False
-# #         print('waiting for licks...')
-# #         while not stop():
-# #             if GPIO.input(lick_pin) == GPIO.HIGH:
-# #                 self.fsm.exp.live_w.toggle_indicator("lick", "on")
-# #                 self.fsm.current_trial.add_lick_time()
-# #                 counter += 1
-# #                 time.sleep(0.08)
-# #                 self.fsm.exp.live_w.toggle_indicator("lick", "off")
-# #                 print("lick detected")
-# #             time.sleep(0.08)
-# #         if counter >= int(self.fsm.exp.exp_params["lick_threshold"]):
-# #             self.got_response = True
-# #             print('threshold reached')
-# #         else:
-# #             print('no response')
-# #         print('num of licks:', counter)
-# #
-#     def on_event(self, event):
-#         if event == 'trial_over':
-#             time.sleep(0.5)
-#             self.fsm.current_trial.write_trial_to_csv(self.fsm.exp.txt_file_path)
-#             if self.fsm.exp.exp_params['ITI_time'] is None:
-#                 while GPIO.input(IR_pin) == GPIO.HIGH:
-#                     time.sleep(0.09)
-#                 time.sleep(1) # wait one sec after exit- before pass to the next trial
-#             else:
-#                 time.sleep(int(self.fsm.exp.exp_params['ITI_time']))
-#             print("Transitioning from trial to idle")
-#             self.fsm.state = IdleState(self.fsm)
-# #
-#     def evaluate_response(self):
-#         value = self.fsm.current_trial.current_value
-#         if value == 'go':
-#             return 'hit' if self.got_response else 'miss'
-#         elif value == 'no-go':
-#             return 'fa' if self.got_response else 'cr'
-#         elif value == 'catch':
-#             return 'catch - response' if self.got_response else 'catch - no response'
-# #
-# class FiniteStateMachine:
-# #
-#     def __init__(self, experiment=None):
-#         self.exp = experiment
-#         self.current_trial = Trial(self)
-#         self.state = IdleState(self)
-# #
-#     def on_event(self, event):
-#         self.state.on_event(event)
-# #
-#     def get_state(self):
-#         return self.state.name
-# #
-# #
-# if __name__ == "__main__":
-#     fsm = FiniteStateMachine()
-# #
-# 
-# 
-# 
-# 
-# 
-# 
-
