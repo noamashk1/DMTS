@@ -397,7 +397,7 @@ class FiniteStateMachine:
     def __init__(self, experiment=None):
         self.exp = experiment
         self.current_trial = Trial(self)
-        self.state = IdleState(self)
+        
         self.all_signals_df = None
         
         # Load white noise for punishment
@@ -410,9 +410,49 @@ class FiniteStateMachine:
             print("Warning: white_noise.npz not found, punishment audio will not work")
 
         # Build a DataFrame with all stimuli referenced by the levels table
-        self._build_all_signals_df()
+        self.build_all_signals_df()
+        self.check_all_signals_not_none()
+        self.state = IdleState(self)
 
-    def _build_all_signals_df(self):
+
+    def check_all_signals_not_none(self):
+        """
+        Checks that all entries in self.all_signals_df are not NoneType.
+        If any row contains a None value, prints the row index and the column name(s) with NoneType.
+        After confirming all are not None, attempts to play each sound and print its length.
+        """
+        if self.all_signals_df is None:
+            print("[FSM] all_signals_df is None")
+            return
+        for idx, row in self.all_signals_df.iterrows():
+            none_columns = [col for col in self.all_signals_df.columns if row[col] is None]
+            if none_columns:
+                print(f"[FSM] Row index {idx} has NoneType in columns: {none_columns}. Row: {row.to_dict()}")
+        # After checking for None, try to play each sound and print its length
+        import sounddevice as sd
+        import numpy as np
+        for idx, row in self.all_signals_df.iterrows():
+            try:
+                # Use iloc[0] style as in auditory_stim, even though here we have a single row
+                # This is for consistency with the auditory_stim approach
+                df = self.all_signals_df
+                single_row = df.loc[[idx]]  # DataFrame with a single row
+                # Use iloc[0] to access the row as in auditory_stim
+                data = single_row.iloc[0]['data'] if 'data' in single_row.columns else None
+                fs = single_row.iloc[0]['fs'] if 'fs' in single_row.columns else None
+                path = single_row.iloc[0]['Stimulus Path'] if 'Stimulus Path' in single_row.columns else None
+
+                if data is not None and fs is not None:
+                    print(f"[FSM] Playing sound from {path} (index {idx})")
+                    print(f"[FSM] Length of sound: {len(data)} samples, fs={fs}")
+                    sd.play(data, fs)
+                    sd.wait()
+                else:
+                    print(f"[FSM] Skipping playback for row {idx} (missing data or fs): {single_row.iloc[0].to_dict()}")
+            except Exception as e:
+                print(f"[FSM] Error playing sound from row {idx}: {e}")
+
+    def build_all_signals_df(self):
         try:
             if self.exp is None or self.exp.levels_df is None:
                 print("[FSM] No levels_df available; skipping all_signals_df build")
