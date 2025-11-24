@@ -325,13 +325,11 @@ class TrialState(State):
             current_lick_state = GPIO.input(lick_pin)
             # Only count lick on transition from LOW to HIGH (rising edge)
             if current_lick_state == 1 and previous_lick_state == 0:  # 1 == HIGH, 0 == LOW
-                if self.fsm.exp.live_w.activate_window:
-                    self.fsm.exp.live_w.toggle_indicator("lick", "on")
-                    time.sleep(0.08) #wait for the lick to be visible on the indicator
                 self.fsm.current_trial.add_lick_time()
                 counter += 1
-                
                 if self.fsm.exp.live_w.activate_window:
+                    self.fsm.exp.live_w.toggle_indicator("lick", "on")
+                    time.sleep(0.01) #wait for the lick to be visible on the indicator
                     self.fsm.exp.live_w.toggle_indicator("lick", "off")
                 print("lick detected")
 
@@ -342,7 +340,7 @@ class TrialState(State):
             
             # Update previous state for next iteration
             previous_lick_state = current_lick_state
-            time.sleep(0.08)
+            time.sleep(0.01)
 
         if not self.got_response:
             print('no response')
