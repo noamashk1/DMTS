@@ -3,7 +3,7 @@ pandas
 matplotlib
 scipy
 pygame
-RPi.GPIO
+#RPi.GPIO
 pyserial
 objgraph
 psutil
