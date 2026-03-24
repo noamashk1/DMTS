@@ -7,3 +7,4 @@ pygame
 pyserial
 objgraph
 psutil
+sounddevice

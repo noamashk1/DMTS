@@ -72,10 +72,15 @@ class Trial:
     def calculate_value(self):
         if self.second_stim_df.iloc[0]['Value'] == "catch":
             return "catch"
-        elif self.first_stim_index==self.second_stim_index:
-            return "go"
-        else:
-            return "no-go"
+        experiment_type = str(self.fsm.exp.exp_params.get("experiment_type", "DMTS")).upper()
+        is_match = self.first_stim_index == self.second_stim_index
+
+        if experiment_type == "DNMTS":
+            # DNMTS: go = non-match, no-go = match
+            return "no-go" if is_match else "go"
+
+        # DMTS: go = match, no-go = non-match
+        return "go" if is_match else "no-go"
 
     def end_trial(self): # the trial is over - go to save it
         pass
