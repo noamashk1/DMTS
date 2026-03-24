@@ -38,7 +38,7 @@ port = ports[0]
 ser = serial.Serial(port=port, baudrate=9600, timeout=0.01)
 print(f"Connected to {port}")
 
-file_log_path = "/home/educage/git_educage2/educage2/pythonProject1/open_files_monitor.log"  # לשנות למיקום שתרצה
+file_log_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "open_files_monitor.log")
 file_logger = logging.getLogger("open_files_monitor")
 file_logger.setLevel(logging.INFO)
 fh = logging.FileHandler(file_log_path)
