@@ -1,6 +1,3 @@
-Level Name,Stimulus Path,Probability,Value,Index
-habituation,stimuli/7KHz.npy,100,go,1
-L1,stimuli/7KHz.npy,50,go,2
-L1,stimuli/14KHz.npy,50,no-go,3
-L2,stimuli/7KHz.npy,50,go,4
-L2,stimuli/12KHz.npy,50,no-go,5
+Level Name,stim path,value,P(go),P(stim),is neurolux,P(neurolux),index
+l,C:/noam_projects/DMTS/stimuli/11KHZ.npz,go\no-go,20,2,No,0,1
+l,C:/noam_projects/DMTS/stimuli/14KHZ.npz,go\no-go,20,2,No,0,2

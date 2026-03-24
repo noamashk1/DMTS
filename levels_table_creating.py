@@ -2,9 +2,20 @@ import tkinter as tk
 from tkinter import messagebox, filedialog
 from tkinter import ttk  # Make sure to import ttk for the Combobox
 import csv  # To handle CSV writing
-from tkinter import filedialog  # To open the file dialog for saving files
 import os
 from column_constants import ColumnNames
+
+
+def _raise_tk_window(win):
+    """Lift window to front; helps when running inside Thonny or similar (dialogs behind IDE)."""
+    try:
+        win.lift()
+        win.attributes("-topmost", True)
+        win.update_idletasks()
+        win.attributes("-topmost", False)
+        win.focus_force()
+    except tk.TclError:
+        pass
 
 
 class LevelDefinitionApp:
@@ -124,6 +135,8 @@ class LevelDefinitionApp:
         
         ok_button = tk.Button(dialog, text="OK", command=validate_and_close, width=10)
         ok_button.pack(pady=10)
+        _raise_tk_window(self.master)
+        _raise_tk_window(dialog)
         dialog.wait_window()
 
         # If user closed dialog without entering valid value, return
@@ -181,7 +194,7 @@ class LevelDefinitionApp:
                 number_of_stimuli = int(count_entry.get().strip())
                 
                 if number_of_stimuli < 1:
-                    messagebox.showwarning("Input Error", "Number of stimuli must be at least 1.")
+                    messagebox.showwarning("Input Error", "Number of stimuli must be at least 1.", parent=self.master)
                     return
                 
                 # Create rows for each stimulus
@@ -194,7 +207,7 @@ class LevelDefinitionApp:
                 self.save_button.config(state=tk.NORMAL)  # Enable button
 
             except ValueError:
-                messagebox.showwarning("Input Error", "Please enter a valid number for the stimuli.")
+                messagebox.showwarning("Input Error", "Please enter a valid number for the stimuli.", parent=self.master)
             
     def save_stimuli_table(self):
         # Gather the data from the stimuli table
@@ -222,11 +235,11 @@ class LevelDefinitionApp:
             try:
                 p_neurolux_val = float(p_neurolux)
                 if p_neurolux_val < 0 or p_neurolux_val > 100:
-                    messagebox.showwarning("Input Error", f"P(neurolux) must be between 0 and 100. Found: {p_neurolux}")
+                    messagebox.showwarning("Input Error", f"P(neurolux) must be between 0 and 100. Found: {p_neurolux}", parent=self.master)
                     all_filled = False
                     break
             except ValueError:
-                messagebox.showwarning("Input Error", f"P(neurolux) must be a valid number. Found: {p_neurolux}")
+                messagebox.showwarning("Input Error", f"P(neurolux) must be a valid number. Found: {p_neurolux}", parent=self.master)
                 all_filled = False
                 break
 
@@ -237,11 +250,13 @@ class LevelDefinitionApp:
             os.makedirs(levels_dir, exist_ok=True)  # Create it if it doesn't exist
 
             # Open the file dialog in the "Levels" folder
+            _raise_tk_window(self.master)
             file_path = filedialog.asksaveasfilename(
                 defaultextension=".csv",
                 filetypes=[("CSV files", "*.csv"), ("All files", "*.*")],
                 initialdir=levels_dir,
-                title="Save Levels File"
+                title="Save Levels File",
+                parent=self.master,
             )
 
             if file_path:
@@ -254,7 +269,7 @@ class LevelDefinitionApp:
                 self.save_path = file_path
                 self.master.destroy()
         else:
-            messagebox.showwarning("Input Error", "Please complete all the parameters.")
+            messagebox.showwarning("Input Error", "Please complete all the parameters.", parent=self.master)
                 
     def create_stimuli_rows(self, level_name, number_of_stimuli):
         # Add rows for each stimulus
@@ -326,19 +341,19 @@ class LevelDefinitionApp:
         # Open file dialog to select a stimulus file
         stimuli_dir = os.path.join(os.getcwd(), "stimuli")
         default_dir = stimuli_dir if os.path.exists(stimuli_dir) else os.getcwd()
+        _raise_tk_window(self.master)
         file_path = filedialog.askopenfilename(
-        filetypes=(("All Files", "*.*"),),
-        initialdir=default_dir,
-        title="Select Stimulus File"
-    )
-#          file_path = filedialog.askopenfilename(title="Select Stimulus File",
-#                                                  filetypes=(("All Files", "*.*"),))
+            parent=self.master,
+            filetypes=(("All Files", "*.*"),),
+            initialdir=default_dir,
+            title="Select Stimulus File",
+        )
         if file_path:  # If a file was selected
             entry.delete(0, tk.END)  # Clear the current entry
             entry.insert(0, file_path)  # Insert the selected file path
-            
+
             # Update the label to show only the filename
-            filename = file_path.split("/")[-1]  # Get the filename from the path
+            filename = os.path.basename(file_path)
             label.config(text=filename)  # Update the label with just the filename
     
     def _on_mousewheel(self, event):
