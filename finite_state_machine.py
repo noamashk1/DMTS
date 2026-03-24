@@ -15,6 +15,7 @@ import logging
 import pandas as pd
 import shutil
 import glob
+from column_constants import ColumnNames
 
 audio_lock = threading.Lock()
 valve_pin = 4  # 23
@@ -278,9 +279,9 @@ class TrialState(State):
         log_memory_usage("After Trial")
         self.on_event('trial_over')
         
-    def tdt_as_stim(self, stop):
+    def tdt_as_stim(self):
         first_stim_path = self.fsm.current_trial.first_stim_path
-        second_stim_path = self.fsm.current_trial.current_stim_path
+        second_stim_path = self.fsm.current_trial.second_stim_path
         with audio_lock:  # ensure only one audio action at a time
             # Try to fetch from preloaded all_signals_df
             try:
@@ -440,7 +441,7 @@ class FiniteStateMachine:
                 # Use iloc[0] to access the row as in auditory_stim
                 data = single_row.iloc[0]['data'] if 'data' in single_row.columns else None
                 fs = single_row.iloc[0]['fs'] if 'fs' in single_row.columns else None
-                path = single_row.iloc[0]['Stimulus Path'] if 'Stimulus Path' in single_row.columns else None
+                path = single_row.iloc[0]['path'] if 'path' in single_row.columns else None
 
                 if data is not None and fs is not None:
                     print(f"[FSM] Playing sound from {path} (index {idx})")
@@ -457,12 +458,12 @@ class FiniteStateMachine:
             if self.exp is None or self.exp.levels_df is None:
                 print("[FSM] No levels_df available; skipping all_signals_df build")
                 return
-            if "Stimulus Path" not in self.exp.levels_df.columns:
-                print("[FSM] 'Stimulus Path' column not found in levels_df; skipping all_signals_df build")
+            if ColumnNames.STIM_PATH not in self.exp.levels_df.columns:
+                print(f"[FSM] '{ColumnNames.STIM_PATH}' column not found in levels_df; skipping all_signals_df build")
                 return
 
-            # Collect both "Stimulus Path" and "base Stim" paths, filter out non-strings and empty
-            paths = [p for p in self.exp.levels_df["stim path"].tolist() if isinstance(p, str) and len(p) > 0]
+            # Collect stimulus paths, filter out non-strings and empty
+            paths = [p for p in self.exp.levels_df[ColumnNames.STIM_PATH].tolist() if isinstance(p, str) and len(p) > 0]
             unique_paths = []
             seen = set()
             for p in paths:

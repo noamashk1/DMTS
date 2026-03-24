@@ -1,0 +1,4 @@
+Level Name,stim path,value,P(go),P(stim),is neurolux,P(neurolux),index
+L1,C:/noam_projects/DMTS/stimuli/10KHZ.npz,go\no-go,100,100,No,0,1
+L2,C:/noam_projects/DMTS/stimuli/10KHZ.npz,go\no-go,50,50,No,0,2
+L2,C:/noam_projects/DMTS/stimuli/14KHZ.npz,go\no-go,50,50,No,0,3

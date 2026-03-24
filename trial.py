@@ -45,20 +45,53 @@ class Trial:
     #     self.current_value = self.calculate_go_no_go(go_probability)
     def calculate_stim(self): #determine if the trial is go\nogo\catch using random
         level_name = self.current_mouse.get_level()
-        level_rows = self.fsm.exp.levels_df.loc[self.fsm.exp.levels_df['Level Name'] == level_name]
-        first_stim_index = self.weighted_random_choice("P(first)", level_rows)
-        second_stim_index = self.weighted_random_choice("P(second)", level_rows)
-        self.first_stim_df = self.fsm.exp.levels_df.loc[(self.fsm.exp.levels_df['Level Name'] == level_name)&(self.fsm.exp.levels_df['Index'] == first_stim_index)]
-        self.second_stim_df = self.fsm.exp.levels_df.loc[(self.fsm.exp.levels_df['Level Name'] == level_name)&(self.fsm.exp.levels_df['Index'] == second_stim_index)]
-        self.first_stim_path = self.first_stim_df.iloc[0]['Stimulus Path']
-        self.second_stim_path = self.second_stim_df.iloc[0]['Stimulus Path']
-        self.first_stim_index = self.first_stim_df.iloc[0]['Index']
-        self.second_stim_index = self.second_stim_df.iloc[0]['Index']
-        self.current_value = self.calculate_value()
+        level_rows = self.fsm.exp.levels_df.loc[self.fsm.exp.levels_df[ColumnNames.LEVEL_NAME] == level_name]
+        first_stim_index = self.weighted_random_choice(ColumnNames.P_STIM, level_rows)
 
-    def weighted_random_choice(self, probabilities_column, level_rows):
+        self.first_stim_df = self.fsm.exp.levels_df.loc[
+            (self.fsm.exp.levels_df[ColumnNames.LEVEL_NAME] == level_name)
+            & (self.fsm.exp.levels_df[ColumnNames.INDEX] == first_stim_index)
+        ]
+
+        self.current_value = self.calculate_value()
+        experiment_type = str(self.fsm.exp.exp_params.get("experiment_type", "DMTS")).upper()
+
+        if experiment_type == "DNMTS":
+            # DNMTS: go = non-match, no-go = match
+            if self.current_value == "go":
+                second_stim_index = self.weighted_random_choice(ColumnNames.P_STIM, level_rows, exclude_index=first_stim_index)
+            else:
+                second_stim_index = first_stim_index
+        else:
+            # DMTS: go = match, no-go = non-match
+            if self.current_value == "go":
+                second_stim_index = first_stim_index
+            else:
+                second_stim_index = self.weighted_random_choice(ColumnNames.P_STIM, level_rows, exclude_index=first_stim_index)
+
+        self.second_stim_df = self.fsm.exp.levels_df.loc[
+            (self.fsm.exp.levels_df[ColumnNames.LEVEL_NAME] == level_name)
+            & (self.fsm.exp.levels_df[ColumnNames.INDEX] == second_stim_index)
+        ]
+        self.first_stim_path = self.first_stim_df.iloc[0][ColumnNames.STIM_PATH]
+        self.second_stim_path = self.second_stim_df.iloc[0][ColumnNames.STIM_PATH]
+        self.first_stim_index = self.first_stim_df.iloc[0][ColumnNames.INDEX]
+        self.second_stim_index = self.second_stim_df.iloc[0][ColumnNames.INDEX]
+        # Compatibility with existing FSM use
+        self.current_stim_path = self.second_stim_path
+
+    def weighted_random_choice(self, probabilities_column, level_rows, exclude_index=None):
         probabilities = level_rows[probabilities_column].tolist()
         indices = level_rows[ColumnNames.INDEX].tolist()
+
+        # Filter out the excluded index if provided
+        if exclude_index is not None:
+            filtered_data = [(p, idx) for p, idx in zip(probabilities, indices) if idx != exclude_index]
+            if not filtered_data:
+                raise ValueError("No stimuli available after filtering")
+            probabilities = [p for p, idx in filtered_data]
+            indices = [idx for p, idx in filtered_data]
+
         total_probability = sum(probabilities)
         
         if total_probability == 0:
@@ -70,17 +103,10 @@ class Trial:
         return chosen_index
 
     def calculate_value(self):
-        if self.second_stim_df.iloc[0]['Value'] == "catch":
-            return "catch"
-        experiment_type = str(self.fsm.exp.exp_params.get("experiment_type", "DMTS")).upper()
-        is_match = self.first_stim_index == self.second_stim_index
-
-        if experiment_type == "DNMTS":
-            # DNMTS: go = non-match, no-go = match
-            return "no-go" if is_match else "go"
-
-        # DMTS: go = match, no-go = non-match
-        return "go" if is_match else "no-go"
+        p_go = float(self.first_stim_df.iloc[0][ColumnNames.P_GO]) / 100.0  # Convert from 0-100 to 0-1
+        if random.random() < p_go:
+            return "go"
+        return "no-go"
 
     def end_trial(self): # the trial is over - go to save it
         pass

@@ -99,8 +99,10 @@ class TkinterApp:
         self.tree.heading(ColumnNames.LEVEL_NAME, text=ColumnNames.LEVEL_NAME)
         self.tree.heading(ColumnNames.STIM_PATH, text=ColumnNames.STIM_PATH)
         self.tree.heading(ColumnNames.VALUE, text=ColumnNames.VALUE)
-        self.tree.heading(ColumnNames.P_FIRST, text=ColumnNames.P_FIRST)
-        self.tree.heading(ColumnNames.P_SECOND, text=ColumnNames.P_SECOND)
+        self.tree.heading(ColumnNames.P_GO, text=ColumnNames.P_GO)
+        self.tree.heading(ColumnNames.P_STIM, text=ColumnNames.P_STIM)
+        self.tree.heading(ColumnNames.IS_NEUROLUX, text=ColumnNames.IS_NEUROLUX)
+        self.tree.heading(ColumnNames.P_NEUROLUX, text=ColumnNames.P_NEUROLUX)
         self.tree.heading(ColumnNames.INDEX, text=ColumnNames.INDEX)
 
 
