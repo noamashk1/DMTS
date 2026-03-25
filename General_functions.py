@@ -2,6 +2,7 @@ import numpy as np
 import sounddevice as sd
 import tkinter as tk
 import smtplib
+import os
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
@@ -26,16 +27,22 @@ def send_email(to_email, subject, body):
         print("❌ Error sending email:", e)
 
 def center_the_window(window,size=None):
-    # Implicitly set dimensions for example purposes
+    # Same behavior as educage2: center reliably, and avoid locking size when size is None.
     if size is not None:
         window.geometry(size)
-    
+
     # Ensures the window's dimensions are known
     window.update_idletasks()
 
     # Retrieve the window size dynamically
     window_width = window.winfo_width()
     window_height = window.winfo_height()
+
+    # Sometimes Tk reports width/height as ~1 before geometry is fully applied.
+    # Fall back to requested size in that case.
+    if window_width <= 1 or window_height <= 1:
+        window_width = window.winfo_reqwidth()
+        window_height = window.winfo_reqheight()
 
     # Get the screen dimensions
     screen_width = window.winfo_screenwidth()
@@ -44,9 +51,13 @@ def center_the_window(window,size=None):
     # Calculate the center position
     center_x = int(screen_width / 2 - window_width / 2)
     center_y = int(screen_height / 2 - window_height / 2)
-    
-    # Adjust the window's position to be centered
-    window.geometry(f"{window_width}x{window_height}+{center_x}+{center_y}")
+
+    # If we set "widthxheight+X+Y" we lock the window size.
+    # For dynamic windows (content added later) we only want to move the window.
+    if size is not None:
+        window.geometry(f"{window_width}x{window_height}+{center_x}+{center_y}")
+    else:
+        window.geometry(f"+{center_x}+{center_y}")
 
 def create_table(data_list, frame):
     for widget in frame.winfo_children():

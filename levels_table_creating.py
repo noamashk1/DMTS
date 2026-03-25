@@ -4,6 +4,7 @@ from tkinter import ttk  # Make sure to import ttk for the Combobox
 import csv  # To handle CSV writing
 import os
 from column_constants import ColumnNames
+import General_functions
 
 
 def _raise_tk_window(win):
@@ -78,6 +79,10 @@ class LevelDefinitionApp:
         # Update the positions of the Add and Load buttons
         self.add_button.grid(row=self.current_row, column=0, columnspan=2, pady=10)
         self.load_button.grid(row=self.current_row + 1, column=0, columnspan=2, pady=10)
+        # If the Save button already exists (after "Build stimuli table"),
+        # keep it in sync with the current_row so it doesn't overlap.
+        if self.save_button is not None:
+            self.save_button.grid(row=self.current_row + 2, column=0, columnspan=2, pady=10)
         
     def header_titles(self):
         # Create header for the stimuli table
@@ -101,12 +106,6 @@ class LevelDefinitionApp:
         dialog.geometry("300x150")
         dialog.transient(self.master)
         dialog.grab_set()
-
-        # Center the dialog
-        dialog.update_idletasks()
-        x = (dialog.winfo_screenwidth() // 2) - (dialog.winfo_width() // 2)
-        y = (dialog.winfo_screenheight() // 2) - (dialog.winfo_height() // 2)
-        dialog.geometry(f"+{x}+{y}")
 
         tk.Label(dialog, text="Enter Go Probability (0-100):", font=("Arial", 10)).pack(pady=10)
         
@@ -137,6 +136,8 @@ class LevelDefinitionApp:
         ok_button.pack(pady=10)
         _raise_tk_window(self.master)
         _raise_tk_window(dialog)
+        # Center after widgets are created and Tk knows their size
+        General_functions.center_the_window(dialog, "300x150")
         dialog.wait_window()
 
         # If user closed dialog without entering valid value, return
@@ -209,6 +210,9 @@ class LevelDefinitionApp:
             except ValueError:
                 messagebox.showwarning("Input Error", "Please enter a valid number for the stimuli.", parent=self.master)
             
+        # Table is built -> recenter the main window (its size changes)
+        General_functions.center_the_window(self.master)
+
     def save_stimuli_table(self):
         # Gather the data from the stimuli table
         data_to_save = []

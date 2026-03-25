@@ -9,6 +9,7 @@ import numpy as np
 from scipy.ndimage import gaussian_filter1d
 from datetime import datetime
 import ast
+import General_functions
 
 def calculate_d_prime(hits, fas, misses, crs):
     hit_rate = hits / (hits + misses) if (hits + misses) > 0 else 0
@@ -30,6 +31,7 @@ class DataAnalysis:
         self.root = root
         self.root.title("Mouse Data Viewer")
         self.root.geometry("300x450")
+        General_functions.center_the_window(self.root, "300x450")
         self.df = None
         self.loaded_file_path = None  # נתיב הקובץ שנטען
 
@@ -132,6 +134,7 @@ class DataAnalysis:
 
         new_window = tk.Toplevel(self.root)
         new_window.title(f"Graphs for Mouse {selected_id}")
+        General_functions.center_the_window(new_window)
 
         #score_counts = mouse_data['score'].value_counts().reindex(['HIT', 'FA', 'MISS', 'CR'], fill_value=0)
         recent_data = mouse_data.tail(recent_data_count)
@@ -236,6 +239,7 @@ class DataAnalysis:
 
         new_window = tk.Toplevel(self.root)
         new_window.title(f"Psychometric Curve for Mouse {selected_id}")
+        General_functions.center_the_window(new_window)
         canvas = FigureCanvasTkAgg(fig, master=new_window)
         canvas.draw()
         canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
@@ -373,6 +377,7 @@ class DataAnalysis:
         # יצירת חלון חדש עם הגרף
         new_window = tk.Toplevel(self.root)
         new_window.title("PSTH - Licks Analysis")
+        General_functions.center_the_window(new_window)
 
         fig, ax = plt.subplots(figsize=(10, 6))
         
