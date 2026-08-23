@@ -8,6 +8,7 @@ import General_functions
 import pandas as pd
 from mouse import Mouse
 import os
+import time
 # Main application
 class MainApp:
     def __init__(self, master, GUI):
@@ -18,6 +19,7 @@ class MainApp:
         self.mice_list = None
         self.mice_dict = None
         self.option_vars = []
+        self.on_levels_changed = None  # set by GUI to refresh OK unapplied state
         self.stop_event = threading.Event()
         self.serial_thread = None
         self.miceTableFrame = tk.LabelFrame(self.master)
@@ -31,6 +33,10 @@ class MainApp:
         self.get_parameter_button.pack(pady=10)
         self.load_mice_button = tk.Button(self.miceBtnsFrame, text="Load mice table", command=self.load_mice_list_from_file)
         self.load_mice_button.pack(pady=10)
+
+    def _notify_level_change(self, *_args):
+        if self.on_levels_changed:
+            self.on_levels_changed()
 
     def load_mice_list_from_file(self):
         parent_dir = os.getcwd()
@@ -80,9 +86,6 @@ class MainApp:
             self.stop_event.set()
             self.serial_thread.join()  # Wait for it to finish
             self.stop_event.clear()  # Reset the event
-        self.stop_event.clear()  # Clear event flag
-        self.serial_thread = threading.Thread(target=self.read_from_serial)
-        self.serial_thread.start()
         
         # Create a new Toplevel window
         self.parameter_window = tk.Toplevel(self.master)
@@ -127,16 +130,21 @@ class MainApp:
         self.done_button.pack(side=tk.BOTTOM, pady=(5, 5))
         self.add_from_file_button.pack(side=tk.BOTTOM, pady=(0, 5))
 
-        threading.Thread(target=self.read_from_serial, daemon=True).start()
+        self.stop_event.clear()  # Clear event flag
+        self.serial_thread = threading.Thread(target=self.read_from_serial, daemon=True)
+        self.serial_thread.start()
         # Wait for the parameter_window to close before proceeding
         self.parameter_window.wait_window()  # This makes the window modal-like
         
     def read_from_serial(self):
+
         try:
             # Setup Serial Connection (adjust COM4 and 9600 to your needs)
             ser = serial.Serial(port='/dev/ttyUSB0',baudrate=9600,timeout=0.01)#timeout=1  # Change '/dev/ttyS0' to the detected port
             while not self.stop_event.is_set():#True:
                 if ser.in_waiting > 0:
+                    # Brief pause to let the full RFID line arrive before reading
+                    time.sleep(0.02)
                     line = ser.readline().decode('utf-8').strip()
                     self.display_data(line)
         except serial.SerialException as e:
@@ -255,11 +263,16 @@ class MainApp:
                 label = tk.Label(self.miceTableFrame, text=item, font=label_font, borderwidth=0)
                 label.grid(row=i + 1, column=0, sticky="nsew", padx=5, pady=2)
 
-                option_var = tk.StringVar(value=str(self.main_GUI.levels_list[0]))  # Default value
-                OptionMenu = ttk.OptionMenu(self.miceTableFrame, option_var,self.main_GUI.levels_list[0], *self.main_GUI.levels_list)
-                OptionMenu.grid(row=i + 1, column=1, sticky="nsew", padx=5, pady=2)
-
-                # Store the StringVar in a list for later access
+                levels = [str(lv) for lv in self.main_GUI.levels_list]
+                option_var = tk.StringVar(value=levels[0])
+                option_menu = tk.OptionMenu(
+                    self.miceTableFrame,
+                    option_var,
+                    levels[0],
+                    *levels[1:],
+                    command=self._notify_level_change,
+                )
+                option_menu.grid(row=i + 1, column=1, sticky="nsew", padx=5, pady=2)
                 self.option_vars.append(option_var)
 
             # Configure grid size weights for uniformity
@@ -268,7 +281,10 @@ class MainApp:
             for row in range(len(self.mice_list) + 1):
                 self.miceTableFrame.grid_rowconfigure(row, weight=0)  # No expansion for rows to keep height small
             self.set_mice_as_dict()
-
+            self._notify_level_change()
+        else:
+            self.option_vars = []
+            self._notify_level_change()
 
     def set_mice_as_dict(self):
         # Retrieve data from the labels and the OptionMenus
